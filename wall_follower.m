@@ -7,7 +7,7 @@ function dist = wall_follower(serPort)
   bumped = false;
 
   while ~bumped
-    bumped = hit_wall(serPort);
+    bumped = bump_check(serPort);
     distance_travelled = distance_travelled + DistanceSensorRoomba(serPort);
     pause(0.1)
   end
