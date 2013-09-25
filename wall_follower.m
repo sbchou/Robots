@@ -14,7 +14,6 @@ function dist = wall_follower(serPort)
     bumped_side = bump_check(serPort);
     
     if bumped_side 
-    
       if ~prev_bump
         %turn to the right without moving until right sensor is triggered
         right = false
@@ -22,8 +21,8 @@ function dist = wall_follower(serPort)
           turnAngle(r,0.1, -10)
           [BumpRight BumpLeft WheDropRight WheDropLeft WheDropCaster BumpFront] = BumpsWheelDropsSensorsRoomba(serPort)
           right = BumpRight
+          pause(0.1)
         end
-
       else %no prev bump
         if bumped_side == 'right' || bumped_side == 'left'
           prev_bump = bumped_side;
@@ -36,27 +35,25 @@ function dist = wall_follower(serPort)
             turnAngle(serPort,0.1, 10)
             [BumpRight BumpLeft WheDropRight WheDropLeft WheDropCaster BumpFront] = BumpsWheelDropsSensorsRoomba(serPort)
             right = BumpRight
+            pause(0.1)
           end
         end
       end
-       
-     else
+    else
       % no sensors triggered. if prev_bump is initialized, turn in the direction of the previous sensor and then go forward. If not, just continue.
         if prev_bump == 'right'
-          turnAngle(serPort, 0.5, -10)
+          turnAngle(serPort, 0.2, -10)
         else
-          turnAngle(serPort, 0.5, 10)
+          turnAngle(serPort, 0.2, 10)
         end
-      
-  end
-  
+    end 
     distance_travelled = distance_travelled + DistanceSensorRoomba(serPort);
     pause(0.1);
-    end
+  end
   
   v = 0;
   w = 0;
-  SetFwdVelAngVelCreate(serPort, v,w);
+  SetFwdVelAngVelCreate(serPort, v,w);  
   dist = distance_travelled;
 end
 
