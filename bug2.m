@@ -31,7 +31,7 @@ function bug2(serPort)
     %=======================%
     % Position Declaration  %
     %=======================%
-    
+
     % Current Position
     current_pos_x = 0;
     current_pos_y = 0;
@@ -41,7 +41,7 @@ function bug2(serPort)
     first_hit_pos_x = 0;
     first_hit_pos_y = 0;
     first_hit_angle = 0;
-    
+    bump_object_y = 0;
     %%
     %=======================%
     % Velocity Declaration  %
@@ -92,9 +92,9 @@ function bug2(serPort)
         current_pos_y = current_pos_y + cos(current_angle) * distance_temp;
         
         % Keep tracking the position and angle after the first hit
-        %first_hit_angle = first_hit_angle + angle_temp;
-        %first_hit_pos_x = first_hit_pos_x + sin(first_hit_angle) * distance_temp;
-        %first_hit_pos_y = first_hit_pos_y + cos(first_hit_angle) * distance_temp;
+        first_hit_angle = first_hit_angle + angle_temp;
+        first_hit_pos_x = first_hit_pos_x + sin(first_hit_angle) * distance_temp;
+        first_hit_pos_y = first_hit_pos_y + cos(first_hit_angle) * distance_temp;
         fprintf('current_angle:%d, current_pos_x: %d, current_pos_y: %d\n', current_angle, current_pos_x, current_pos_y)
         fprintf('first_hit_angle:%d, first_hit_pos_x: %d, first_hit_pos_y: %d\n', first_hit_angle, first_hit_pos_x, first_hit_pos_y)
         plot(-current_pos_x, current_pos_y)
@@ -117,11 +117,15 @@ function bug2(serPort)
             case 1 % Move Forward
                 display('Moving Forward');
                 SetFwdVelAngVelCreate(serPort, velocity_val, 0 );
+                if abs(current_pos_y) >= 10.0
+                    status = 5;
+                end
                 if (BumpRight || BumpLeft || BumpFront)
                     status = 2; % Change Status to Wall Follow
                     first_hit_angle = 0;
                     first_hit_pos_x = 0;
-                    first_hit_pos_y = 0;                    
+                    first_hit_pos_y = 0;
+                    bump_object_y = current_pos_y;                    
                 end
             case 2 % Wall Follow | Haven't left the threshold of the hit point
                 display('Block 2');
@@ -132,7 +136,7 @@ function bug2(serPort)
             case 3 % Wall Follow | Left the threshold of the hit point
                 display('Block 3');
                 WallFollow(velocity_val, angular_velocity_val, BumpRight, BumpLeft, BumpFront, Wall, serPort);
-                if((current_pos_x <= 0) && (current_pos_y > first_hit_pos_y + 0.5))
+                if((current_pos_x <= 0) && (current_pos_y > bump_object_y + 0.5))
                     fprintf('reached x')
                 %if(hit_distance < dist_from_first_hit_point)
                    status = 4; 
@@ -141,17 +145,18 @@ function bug2(serPort)
                 display('Block 4');                
                 turnAngle(serPort, angular_velocity_val, current_angle);
                 current_angle = mod(current_angle, pi) + pi;
-                if (pi * 0.95 < current_angle) && (current_angle < pi * 1.05)
+                if (abs(pi - current_angle) <= 0.1)
+                    current_angle = 0;
                     SetFwdVelAngVelCreate(serPort, 0, 0 );
-                    status = 5;
+                    if abs(current_pos_y) < 10.0
+                        status = 1;
+                    else
+                        status = 5;
+                    end
                 end
             case 5 % Stop and Orient at Start Position
-                fprintf('reached start angle')
-                if abs(current_pos_y) < 10
-                    status = 1;
-                else
-                    return;
-                end
+                fprintf('reached finish')
+                return;
         end
     end
 end
