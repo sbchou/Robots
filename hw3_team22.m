@@ -1,324 +1,256 @@
-% HW3 - Team 22
-% Jason Ravel - sdm2140
+% HW3 Team 22
+% Sophie Chou sbc2125
+% Arvind Srinivasan vs2371
 %
-function hw3_Team22(serPort)
 
+function map_room(serPort, t_max)
 
-    tic; 
-
-  %variables
-  
- 
-    diam_irobot = .35;
-    time_out = 30; 
-    speed_of_turn = .1;
-    forward_speed = .25;
-    it_is_free = 1; 
-    UNEXPLORED= 0;
-    Collision = 2; 
-    hp_tresh = .3;
-
+    %=============================================================%
+    % Description                                                 %
+    %=============================================================%
+    % This is a simple solution for Homework 1.                   %
+    % The robot moves forward till it bumps on an object (wall).  %
+    % The robot follows the object around till it reaches the     %
+    % first bump position and then returns back to its initial    %
+    % starting point with the same orientation.                   %
+    %=============================================================%
     
-    wall_sensor_boolean = false; 
-    try 
-        AnalogWallSensorReadRoomba(serPort);
-        speed_of_turn = 0.05;
-        time_out = 120;
-        wall_sensor_boolean = true;
-        forward_speed = 0.05;
-    catch err
-    end
+    %%
+    %=============================================================%
+    % Clear cache & avoid NaN values                              %
+    %=============================================================%
+    clc;                                                          % Clear the cache
     
+    % Poll for bump Sensors to avoid getting NaN values when the 
+    % robot first hits a wall
+    [BumpRight BumpLeft WheDropRight WheDropLeft WheDropCaster ...
+              BumpFront] = BumpsWheelDropsSensorsRoomba(serPort);
+    %=============================================================%
 
-    origFig = gcf;
-    posPlot = axes('Parent', figure());
-    hold(posPlot);
-
-    angle = 0; 
+    %%
+    %=============================================================%
+    % Variable Declaration                                        %
+    %=============================================================%
     
-    hit_pos =0; 
-    
-    dist_from_hit = 0;
+    %%
+    %=======================%
+    % Position Declaration  %
+    %=======================%
+    tic
 
-    roomPlot = axes('Parent', figure());
-    figure(origFig);
+    ROOMBA_UNIT = .35
+
+    % Current Position
+    current_pos_x = 0;
+    current_pos_y = 0;
+    current_angle = 0;
+    
+    % First Hit Position
+    first_hit_pos_x = 0;
+    first_hit_pos_y = 0;
+    first_hit_angle = 0;
+    bump_object_y = 0;
+    %%
+    %=======================%
+    % Velocity Declaration  %
+    %=======================%
+    velocity_val = 0.2;
+    angular_velocity_val = 0.1;
+    %=======================%
+
+    %=======================%
+    % Distance Thresholds   %
+    %=======================%
+    dist_from_start_point = 0.3;
+    dist_from_first_hit_point = 0.2;
+    %=======================%
    
-    sensors = ReadSensors();
-
+    %=======================%
+    % Status Variable       %
+    %=======================%
+    status = 1;             % 1 -> Move Forward, 
+                            % 2 -> Wall Follow | Havent left the threshold of the hit point
+                            % 3 -> Wall Follow | Left the threshold of the hit point
+                            % 4 -> Go Back to Start Position  
+                            % 5 -> Stop and Orient at Start Position
+    %=============================================================%
     
-    heading = 0;
-    
-    the_pos = [0; 0];
+    x_hist = [current_pos_x]
+    y_hist = [current_pos_y]
+    room = [1; 0]
+    y_0 = 1;
+    x_0 = 1;
+    %% Main Loop    
+    while(toc < t_max)
         
-    the_grid = [0]; 
-
-   minimum_x = 0;
-    minimum_y = 0;
-       
-    forwarding = 2;
-    FOLLOWING_Collision=3; 
-    FOLLOW_Collision = 0;
-    turning = 1;
-
-    lastNewPointTime = toc;
-
-    state = forwarding;
-    
-    
-    MainLoop();
-    
-
-
-    function MainLoop
-        Drive(forward_speed, forward_speed); 
+        %%
+        %=============================================================%
+        % Step 1 - Read Sensors                                       %
+        %=============================================================%
+        % For each loop, first read data from the robot sensor
+        [BumpRight BumpLeft WheDropRight WheDropLeft WheDropCaster ...
+              BumpFront] = BumpsWheelDropsSensorsRoomba(serPort);     % Poll for Bump Sensors
+        Wall = WallSensorReadRoomba(serPort);                         % Poll for Wall Sensor
+        distance_temp = DistanceSensorRoomba(serPort);                % Poll for Distance delta
+        angle_temp = AngleSensorRoomba(serPort);                      % Poll for Angle delta
+        %=============================================================%
         
-        turnAngle = 0; 
-        turned = 0; 
+        %%
+        %=============================================================%
+        % Step 2 - Update Odometry                                    %
+        %=============================================================%
+        % Keep tracking the position and angle before the first hit
+        current_angle = current_angle + angle_temp;               
+        current_pos_x = current_pos_x + cos(current_angle) * distance_temp;
+        current_pos_y = current_pos_y + sin(current_angle) * distance_temp;
+        
+        % Keep tracking the position and angle after the first hit
+        first_hit_angle = first_hit_angle + angle_temp;
+        first_hit_pos_x = first_hit_pos_x + cos(first_hit_angle) * distance_temp;
+        first_hit_pos_y = first_hit_pos_y + sin(first_hit_angle) * distance_temp;
 
-%if diff in elapsed time and time last point observed > timeout, stop
-        while(time_out >= toc - lastNewPointTime)       
-            UpdateOdometry();
- 
-            switch (state)
-                case FOLLOW_Collision
-                    dist_from_hit = norm(the_pos - hit_pos);
-                    if(dist_from_hit > hp_tresh)
-                        state = FOLLOWING_Collision;
-                        
-                    elseif(sensors.Bump)
-                        Drive(speed_of_turn, -speed_of_turn);
-                    elseif(~sensors.Wall)
-                        Drive(0, speed_of_turn);
+
+        previous_x = floor(current_pos_x/ROOMBA_UNIT)
+        previous_y = floor(current_pos_y/ROOMBA_UNIT)
+
+        if(floor(current_pos_x/ROOMBA_UNIT) > previous_x)
+            x_hist = [x_hist previous_x]         
+        end
+
+        if(floor(current_pos_y/ROOMBA_UNIT) > previous_y)
+            y_hist = [y_hist previous_y]
+
+        end
+
+        dims  = size(room)
+        % current size of matrix
+        y_dim = dims(1)
+        x_dim = dims(2)
+        if (previous_y > y_dim) % add a row to the top
+            room = [zeros(1, x_dim); room]
+        elseif (previous_y + y_0 < 0) % add a row to the bottom
+            room = [room; zeros(1, x_dim)]
+            y_0 = y_0 + 1
+        end
+        if (previous_x > x_dim) % add a row to the right
+            room = [room zeros(y_dim, 1)]
+        elseif (previous_x + x_0  < 0) % add a row to the left
+            room = [zeros(y_dim, 1) room]
+            x_0 = x_0 + 1
+        end
+
+        room(previous_y + y_0, previous_x + x_0) = 1
+
+        imagesc(room)
+        grid on
+
+        %fprintf('current_angle:%d, current_pos_x: %d, current_pos_y: %d\n', current_angle, current_pos_x, current_pos_y)
+        %fprintf('first_hit_angle:%d, first_hit_pos_x: %d, first_hit_pos_y: %d\n', first_hit_angle, first_hit_pos_x, first_hit_pos_y)
+
+        %scatter(first_hit_pos_x, first_hit_pos_y)
+
+
+        drawnow;
+        %=============================================================%
+        
+        %%
+        %=============================================================%
+        % Step 3 - Calculate Euclidean Distances                      %
+        %=============================================================%
+        start_distance = sqrt(current_pos_x ^ 2 + current_pos_y ^ 2);
+        hit_distance = sqrt(first_hit_pos_x ^ 2 + first_hit_pos_y ^ 2);
+        %=============================================================%
+        
+        %%
+        %=============================================================%
+        % Step 4 - Check Status                                       %
+        %=============================================================%
+        switch status
+            case 1 % Move Forward
+                %display('Moving Forward');
+                SetFwdVelAngVelCreate(serPort, velocity_val, 0 );
+                if abs(current_pos_y) >= 10.0
+                    status = 5;
+                end
+                if (BumpRight || BumpLeft || BumpFront)
+                    status = 2; % Change Status to Wall Follow
+                    first_hit_angle = 0;
+                    first_hit_pos_x = 0;
+                    first_hit_pos_y = 0;
+                    bump_object_y = current_pos_y;                    
+                end
+            case 2 % Wall Follow | Havent left the threshold of the hit point
+                %display('Block 2');
+                WallFollow(velocity_val, angular_velocity_val, BumpRight, BumpLeft, BumpFront, Wall, serPort);
+                if (hit_distance > dist_from_first_hit_point)
+                    status = 3;
+                end
+            case 3 % Wall Follow | Left the threshold of the hit point
+                %display('Block 3');
+                WallFollow(velocity_val, angular_velocity_val, BumpRight, BumpLeft, BumpFront, Wall, serPort);
+                if((current_pos_x <= 0) && (current_pos_y > bump_object_y + 0.5))
+                    %fprintf('reached x')
+                %if(hit_distance < dist_from_first_hit_point)
+                   status = 4; 
+                end
+            case 4 % Go Back to Start Position
+                %display('Block 4');                
+                turnAngle(serPort, angular_velocity_val, current_angle);
+                current_angle = mod(current_angle, pi) + pi;
+                if (abs(pi - current_angle) <= 0.1)
+                    current_angle = 0;
+                    SetFwdVelAngVelCreate(serPort, 0, 0 );
+                    if abs(current_pos_y) < 10.0
+                        status = 1;
                     else
-                        Drive(forward_speed, forward_speed);
+                        status = 5;
                     end
-                    
-                    UpdateGrid(Collision); 
-                case FOLLOWING_Collision
-                    dist_from_hit = norm(the_pos - hit_pos);
-                    if(dist_from_hit < hp_tresh)
-                        state = turning;
-                        Drive(speed_of_turn, -speed_of_turn);
-                        turnAngle = GenRandTurnAngle(90, 135);
-                        turned = 0; 
-
-                    elseif(sensors.Bump)
-                        Drive(speed_of_turn, -speed_of_turn);
-                    elseif(~sensors.Wall)
-                        Drive(0, speed_of_turn);
-                    else
-                        Drive(forward_speed, forward_speed);
-                    end
-                    
-                    UpdateGrid(Collision); 
-                case turning
-                    turned = turned + abs(sensors.Angle) / pi() * 180; 
-                    if (turned > turnAngle)
-                        Drive(forward_speed, forward_speed); 
-                        state = forwarding; 
-                    end
-                case forwarding
-                    if (sensors.Bump)
-                        hit_pos = the_pos;
-                        currentPoint = GetCurrentCell(); 
-                        normCurrPoint = normPoint(currentPoint); 
-                        x_idx = normCurrPoint(1);
-                        y_idx = normCurrPoint(2); 
-                        [x_size, y_size] = size(the_grid); 
-                        if((x_idx * y_idx ~= 0) && (x_idx <= x_size && y_idx <= y_size) && ...
-                            the_grid(x_idx, y_idx) == Collision)
-                        
-                            state = turning;
-                            Drive(speed_of_turn, -speed_of_turn);
-                            turnAngle = GenRandTurnAngle(0, 360);
-                            turned = 0; 
-                        else 
-                            state = FOLLOW_Collision; 
-                        end
-                    else
-                        UpdateGrid(it_is_free);             
-                    end
-            end 
-            pause(0.1);
+                end
+            case 5 % Stop and Orient at Start Position
+                fprintf('reached finish\n')
+                fprintf('plotting...\n')
+                plot(x_hist, y_hist)
+                title('x and y traveled')
+                xlabel('x')
+                ylabel('y')
         end
-        Stop()
     end
+    fprintf('reached finish\n')
+    fprintf('plotting...\n')
+    plot(x_hist, y_hist)
+    title('x and y traveled')
+    xlabel('x')
+    ylabel('y')
+end
 
+%%
+% Wall Follow Function
+function WallFollow(velocity_val, angular_velocity_val, BumpRight, BumpLeft, BumpFront, Wall, serPort)
 
-  
-    function currentCell = GetCurrentCell()
-        currentCell = floor(the_pos ./ diam_irobot);
-    end
-
-    function Drive(leftSpeed, rightSpeed)
-        SetDriveWheelsCreate(serPort, leftSpeed, rightSpeed);
-    end
-
-    function turnAngle = GenRandTurnAngle(minAngle, maxAngle)
-        turnAngle = minAngle + rand() * (maxAngle - minAngle); 
-    end 
-
-    function Stop()
-        Drive(0,0); 
-    end
-
-
-
-
-    function axis = NormalizeAxis(len_axis, min_axis)
-        axis = [0:len_axis-1];
-        axis = axis + min_axis;
-        axis = axis .* diam_irobot; 
-    end
-
-
-    function normalizedPoint = normPoint(cell)
-        normalizedPoint = (cell - [minimum_x; minimum_y])  + [1; 1]; 
-    end
-
-
+    % Angle Velocity for different bumps
+    av_bumpright =  4 * angular_velocity_val;
+    av_bumpleft  =  2 * angular_velocity_val;
+    av_bumpfront =  3 * angular_velocity_val;
+    av_nowall    = -4 * angular_velocity_val;
     
-    
-    
-    function g = PadTopRight(g)
-        [len_x, len_y] = size(g);
-                       
-        g = [ g; ones(1,len_y) * UNEXPLORED];
-        g = [g ones(len_x+1, 1) * UNEXPLORED];
+    if BumpRight || BumpLeft || BumpFront
+        v = 0;                              % Set Velocity to 0
+    elseif ~Wall
+        v = 0.25 * velocity_val;            % Set Velocity to 1/4 of the default
+    else
+        v = velocity_val;                   % Set Velocity to the default
     end
 
-
-	function PlotRoom() 
-        
-        % Orient the grid correctly
-        tmp_grid = rot90(the_grid);
-        [len_x, len_y] = size(the_grid);
-        
-        %Pad axis by 1 so that pcolor actually shows the end of it.
-        x = NormalizeAxis(len_x+1, minimum_x);
-        y = NormalizeAxis(len_y+1, minimum_y);
-        
-        [X, Y] = meshgrid(x,y);
-        
-        %This is for show. If you don't this the top and right get cut off
-        %in the final plot
-        tmp_grid = PadTopRight(tmp_grid);
-        Y = flipud(Y); 
-        
-        %Color map for 
-        colormap([1 1 1; .5 1 .5; 1 0 0]);
-        pcolor(roomPlot, X, Y, tmp_grid)
+    if BumpRight
+    av = av_bumpright;                      % Set Angular Velocity to av_bumpright
+    elseif BumpLeft
+        av = av_bumpleft;                   % Set Angular Velocity to av_bumpleft
+    elseif BumpFront
+        av = av_bumpfront;                  % Set Angular Velocity to av_bumpfront
+    elseif ~Wall
+        av = av_nowall;                     % Set Angular Velocity to av_nowall
+    else
+        av = 0;                             % Set Angular Velocity to 0
     end
-
-	function UpdateOdometry()
-	        lastHeading = heading;
-	        lastthe_pos = the_pos;
-
-	        sensors = ReadSensors();
-
-	        angle = sensors.Angle;
-	        dist = sensors.Dist;
-	        if(angle == 0)
-	            % Robot traveled in a straight line.
-	            the_pos = the_pos + [cos(heading); sin(heading)] .* dist;
-	        else
-	            % arc
-	            heading = mod(heading + angle, 2 * pi());
-	            turnRadius = dist / angle;
-	            the_pos = [0; -turnRadius];
-	            the_pos = [cos(angle), -sin(angle); sin(angle), cos(angle)] * the_pos;
-	            the_pos = the_pos + [0; turnRadius];
-	            the_pos = [cos(lastHeading), -sin(lastHeading); ...
-	                        sin(lastHeading), cos(lastHeading)] * the_pos;
-	            the_pos = the_pos + lastthe_pos;
-	        end
-
-
-
-	        % plot the robot's path (from its point of view)
-	         if(~isequal(the_pos, lastthe_pos))
-	             plot(posPlot, [lastthe_pos(1); the_pos(1)], ...
-	                           [lastthe_pos(2); the_pos(2)], 'b');
-	         end
-	    end
-
-   function UpdateGrid(cellVal)
-        currPoint = GetCurrentCell();
-        [size_x, size_y] = size(the_grid);
-        
-        % Increase the size of the "world" if need be 
-        if (currPoint(1) < minimum_x)
-            minimum_x = currPoint(1);
-            the_grid = [ones(1,size_y)*UNEXPLORED; the_grid]; 
-            [size_x, size_y] = size(the_grid);
-        end
-        
-        if (currPoint(1) - minimum_x >= size_x) 
-            the_grid = [the_grid; ones(1, size_y)*UNEXPLORED]; 
-            [size_x, size_y] = size(the_grid);
-        end
-                
-        if (currPoint(2) < minimum_y)
-            minimum_y = currPoint(2);
-            the_grid = [ones(size_x, 1)*UNEXPLORED];
-            [size_x, size_y] = size(the_grid);
-        end        
-        
-        if (currPoint(2) - minimum_y >= size_y)
-            the_grid = [the_grid ones(size_x, 1)*UNEXPLORED];
-        end
-        
-        normCurrPoint = normPoint(currPoint); 
-        x_idx = normCurrPoint(1);
-        y_idx = normCurrPoint(2); 
-        
-        if (the_grid(x_idx, y_idx) == UNEXPLORED)
-            fprintf('Raw(%d, %d) -> Logical(%d, %d) -- Min(%d, %d)\n', ...
-                currPoint(1), currPoint(2), x_idx, y_idx, minimum_x, minimum_y);
-            
-            lastNewPointTime = toc;         
-            the_grid(x_idx, y_idx) = cellVal;   
-            PlotRoom()
-        else if (the_grid(x_idx, y_idx) == it_is_free)
-            if (cellVal == Collision)
-                lastNewPointTime = toc; 
-            end
-            
-            the_grid(x_idx, y_idx) = cellVal;
-            end
-            PlotRoom()
-        end
-     end
-
-   
-
-
-    function sensors = ReadSensors()
-        
-        sensors.Wall = (wall_sensor_boolean && CheckSensor(AnalogWallSensorReadRoomba(serPort)) >= 1) ... 
-                    || CheckSensor(WallSensorReadRoomba(serPort));
-      
-        
-        [sensors.BumpRight, sensors.BumpLeft, wdr, wdl, wdc, sensors.BumpFront] ...
-            = BumpsWheelDropsSensorsRoomba(serPort);
-                
-        sensors.Bump = CheckSensor(sensors.BumpRight) ... 
-                    || CheckSensor(sensors.BumpLeft) ... 
-                    || CheckSensor(sensors.BumpFront);
-                
-        sensors.Angle = CheckSensor(AngleSensorRoomba(serPort));
-        
-        sensors.Dist = CheckSensor(DistanceSensorRoomba(serPort));
-        
-    end
-
-
-    function sensorVal = CheckSensor(val)
-        if (isnan(val))
-            sensorVal = 0; 
-            return 
-        end
-        
-        sensorVal = val;
-    end
+    SetFwdVelAngVelCreate(serPort, v, av );
 end
