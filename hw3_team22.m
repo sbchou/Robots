@@ -116,7 +116,7 @@ function map_room(serPort, t_max)
         if(floor(current_pos_x/ROOMBA_UNIT) > previous_x)
             x_hist = [x_hist previous_x]         
         end
-
+   
         if(floor(current_pos_y/ROOMBA_UNIT) > previous_y)
             y_hist = [y_hist previous_y]
 
@@ -128,26 +128,27 @@ function map_room(serPort, t_max)
         x_dim = dims(2)
         if (previous_y > y_dim) % add a row to the top
             room = [zeros(1, x_dim); room]
-        elseif (previous_y + y_0 < 0) % add a row to the bottom
+        elseif (previous_y + y_0 < 1) % add a row to the bottom
             room = [room; zeros(1, x_dim)]
             y_0 = y_0 + 1
         end
         if (previous_x > x_dim) % add a row to the right
             room = [room zeros(y_dim, 1)]
-        elseif (previous_x + x_0  < 0) % add a row to the left
+        elseif (previous_x + x_0  < 1) % add a row to the left
             room = [zeros(y_dim, 1) room]
             x_0 = x_0 + 1
         end
+
+        disp('PREV X AND Y')
+        disp(x_0)
+        disp(y_0)
+        disp(previous_x)
+        disp(previous_y)
 
         room(previous_y + y_0, previous_x + x_0) = 1
 
         imagesc(room)
         grid on
-
-        %fprintf('current_angle:%d, current_pos_x: %d, current_pos_y: %d\n', current_angle, current_pos_x, current_pos_y)
-        %fprintf('first_hit_angle:%d, first_hit_pos_x: %d, first_hit_pos_y: %d\n', first_hit_angle, first_hit_pos_x, first_hit_pos_y)
-
-        %scatter(first_hit_pos_x, first_hit_pos_y)
 
 
         drawnow;
@@ -169,9 +170,7 @@ function map_room(serPort, t_max)
             case 1 % Move Forward
                 %display('Moving Forward');
                 SetFwdVelAngVelCreate(serPort, velocity_val, 0 );
-                if abs(current_pos_y) >= 10.0
-                    status = 5;
-                end
+
                 if (BumpRight || BumpLeft || BumpFront)
                     status = 2; % Change Status to Wall Follow
                     first_hit_angle = 0;
@@ -193,34 +192,41 @@ function map_room(serPort, t_max)
                 %if(hit_distance < dist_from_first_hit_point)
                    status = 4; 
                 end
-            case 4 % Go Back to Start Position
+            
+            case 4 %randomnly go somewhere else
+                turnAngle(serPort, angular_velocity_val, rand * 2 * pi )
+                status = 1;
+
+            end
+
+            %case 4 % Go Back to Start Position
                 %display('Block 4');                
-                turnAngle(serPort, angular_velocity_val, current_angle);
-                current_angle = mod(current_angle, pi) + pi;
-                if (abs(pi - current_angle) <= 0.1)
-                    current_angle = 0;
-                    SetFwdVelAngVelCreate(serPort, 0, 0 );
-                    if abs(current_pos_y) < 10.0
-                        status = 1;
-                    else
-                        status = 5;
-                    end
-                end
-            case 5 % Stop and Orient at Start Position
-                fprintf('reached finish\n')
-                fprintf('plotting...\n')
-                plot(x_hist, y_hist)
-                title('x and y traveled')
-                xlabel('x')
-                ylabel('y')
-        end
+                %turnAngle(serPort, angular_velocity_val, current_angle);
+                %current_angle = mod(current_angle, pi) + pi;
+                %if (abs(pi - current_angle) <= 0.1)
+                %    current_angle = 0;
+                %    SetFwdVelAngVelCreate(serPort, 0, 0 );
+                %    if abs(current_pos_y) < 10.0
+                %        status = 1;
+                %    else
+                %        status = 5;
+                %     end
+                %end
+            %case 5 % Stop and Orient at Start Position
+            %    fprintf('reached finish\n')
+            %    fprintf('plotting...\n')
+            %    plot(x_hist, y_hist)
+            %    title('x and y traveled')
+            %    xlabel('x')
+            %    ylabel('y')
+        %end
     end
-    fprintf('reached finish\n')
-    fprintf('plotting...\n')
-    plot(x_hist, y_hist)
-    title('x and y traveled')
-    xlabel('x')
-    ylabel('y')
+    fprintf('ran out of time\n')
+    %fprintf('plotting...\n')
+    %plot(x_hist, y_hist)
+    %title('x and y traveled')
+    %xlabel('x')
+    %ylabel('y')
 end
 
 %%
