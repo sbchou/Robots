@@ -126,13 +126,13 @@ function map_room(serPort, t_max)
         % current size of matrix
         y_dim = dims(1)
         x_dim = dims(2)
-        if (previous_y > y_dim) % add a row to the top
+        if (previous_y >= y_dim) % add a row to the top
             room = [zeros(1, x_dim); room]
         elseif (previous_y + y_0 < 1) % add a row to the bottom
             room = [room; zeros(1, x_dim)]
             y_0 = y_0 + 1
         end
-        if (previous_x > x_dim) % add a row to the right
+        if (previous_x >= x_dim) % add a row to the right
             room = [room zeros(y_dim, 1)]
         elseif (previous_x + x_0  < 1) % add a row to the left
             room = [zeros(y_dim, 1) room]
@@ -145,7 +145,18 @@ function map_room(serPort, t_max)
         disp(previous_x)
         disp(previous_y)
 
-        room(previous_y + y_0, previous_x + x_0) = 1
+        color = 0
+
+        if status == 2
+            color = 2
+        else
+            color = 1
+        end
+
+        if(room(previous_y + y_0, previous_x + x_0) ~= 2)
+            room(previous_y + y_0, previous_x + x_0) = color
+        end
+
 
         imagesc(room)
         grid on
@@ -199,34 +210,10 @@ function map_room(serPort, t_max)
 
             end
 
-            %case 4 % Go Back to Start Position
-                %display('Block 4');                
-                %turnAngle(serPort, angular_velocity_val, current_angle);
-                %current_angle = mod(current_angle, pi) + pi;
-                %if (abs(pi - current_angle) <= 0.1)
-                %    current_angle = 0;
-                %    SetFwdVelAngVelCreate(serPort, 0, 0 );
-                %    if abs(current_pos_y) < 10.0
-                %        status = 1;
-                %    else
-                %        status = 5;
-                %     end
-                %end
-            %case 5 % Stop and Orient at Start Position
-            %    fprintf('reached finish\n')
-            %    fprintf('plotting...\n')
-            %    plot(x_hist, y_hist)
-            %    title('x and y traveled')
-            %    xlabel('x')
-            %    ylabel('y')
-        %end
+         
     end
     fprintf('ran out of time\n')
-    %fprintf('plotting...\n')
-    %plot(x_hist, y_hist)
-    %title('x and y traveled')
-    %xlabel('x')
-    %ylabel('y')
+
 end
 
 %%
