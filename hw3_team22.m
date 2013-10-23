@@ -8,11 +8,10 @@ function map_room(serPort, t_max)
     %=============================================================%
     % Description                                                 %
     %=============================================================%
-    % This is a simple solution for Homework 1.                   %
-    % The robot moves forward till it bumps on an object (wall).  %
-    % The robot follows the object around till it reaches the     %
-    % first bump position and then returns back to its initial    %
-    % starting point with the same orientation.                   %
+    % NOTE COLORATION:          
+    % UNEXPLORED = BLUE
+    % EXPLORED = GREEN
+    % OBJECT = RED     
     %=============================================================%
     
     %%
